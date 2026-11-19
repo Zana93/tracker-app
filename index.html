@@ -56,7 +56,7 @@ function pwForm(msg) {
     const un = $('un').value.trim().toLowerCase(), pw = $('pw').value; if (!un || !pw) return;
     $('go').disabled = true; $('go').textContent = '…'; $('er').textContent = '';
     for (const e of LOGIN.filter(e => (e.user || 'admin').toLowerCase() === un)) {
-      try { const c = await openSeal(pw, e); set(K, {...c, user: c.user || e.user || 'admin'}); set('mt.lastUser', un); return start(); } catch {}
+      try { const c = await openSeal(pw, e); set(K, {...c, user: e.user || c.user || 'admin', role: c.role}); set('mt.lastUser', un); return start(); } catch {}
     }
     $('go').disabled = false; $('go').textContent = 'چوونەژوورەوە'; $('er').textContent = 'ناو یان پاسۆرد هەڵەیە';
   };
@@ -95,7 +95,7 @@ async function resetFlow(user, code) {
   box.innerHTML = '<div class="spin"></div>';
   let c;
   try { c = await openSeal(normCode(code), e.rec); } catch { return forgot('کۆدەکە هەڵەیە.', user); }
-  c = {...c, user: c.user || e.user || 'admin'};
+  c = {...c, user: e.user || c.user || 'admin'};
   box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">پاسۆردی نوێ</h1><p><b>${un.replace(/[&<>"]/g, '')}</b> — پاسۆردێکی نوێ دابنێ.</p>
     <label>پاسۆردی نوێ</label><input id="n1" type="password" autocomplete="new-password">
     <label>دووبارە</label><input id="n2" type="password" autocomplete="new-password">
