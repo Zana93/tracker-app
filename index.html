@@ -62,22 +62,66 @@ function pwForm(msg) {
   };
   $('go').onclick = go; $('pw').onkeydown = e => { if (e.key === 'Enter') go(); };
   ($('un').value ? $('pw') : $('un')).focus();
-  $('fg').onclick = forgot;
+  $('fg').onclick = () => forgot();
 }
-// no server, so a password can't be emailed: the way back in is the GitHub token, then set a new password
-function forgot() {
+// forgotten password: every account can have a recovery code that was emailed to its owner (link #reset=user:CODE).
+// The code unlocks a second sealed copy of the token; then a new password is sealed and saved.
+const normCode = c => { const x = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return x.replace(/(.{5})(?=.)/g, '$1-'); };
+const u8b64 = u => btoa(String.fromCharCode(...u));
+async function seal(pw, payload) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12)), iter = 600000;
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', salt, iterations: iter, hash: 'SHA-256'}, base, {name: 'AES-GCM', length: 256}, false, ['encrypt']);
+  const data = new Uint8Array(await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, new TextEncoder().encode(JSON.stringify(payload))));
+  return {v: 1, iter, salt: u8b64(salt), iv: u8b64(iv), data: u8b64(data)};
+}
+function forgot(msg, user) {
   box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">پاسۆردت لەبیر چووە؟</h1>
-    <p>پاسۆردەکان لە هیچ شوێنێک بە ئاشکرا هەڵناگیرێن، بۆیە ناردنەوەیان ناکرێت. ئەم ڕێگایە بەکاربهێنە:</p>
-    <ol style="padding-inline-start:20px;margin:0 0 6px;font-size:14px;line-height:1.9">
-      <li>ئەگەر کەسێکی تر ئادمینە، داوای لێ بکە لە <b>👥 ئەکاونتەکان</b> هەمان ناوت بە پاسۆردێکی نوێ دروست بکاتەوە.</li>
-      <li>یان خۆت: لە GitHub بڕۆ بۆ <a style="color:var(--accent)" href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">Fine-grained tokens</a> ← <b>market-tracker</b> ← <b>Regenerate token</b> ← کۆپی بکە.</li>
-      <li>لە خوارەوە بە Token بچۆ ژوورەوە.</li>
-      <li>لە سەرەوە، لە تەنیشت ڕێکەوت، کلیک لە ناوەکەت بکە ← <b>👥 ئەکاونتەکان و پاسۆرد</b> ← هەمان ناوت بە پاسۆردێکی نوێ دروست بکەرەوە.</li>
-    </ol>
-    <button id="tk">چوونەژوورەوە بە Token</button>
+    <p>ئەو ئیمەیڵەی کاتی دروستکردنی ئەکاونتەکەت هات بکەرەوە و <b>لینکەکەی</b> دابگرە. یان ناوەکەت و <b>کۆدەکەی ناو ئیمەیڵەکە</b> لێرە بنووسە.</p>
+    <label>ناو</label><input id="fu" autocapitalize="none" spellcheck="false" dir="auto" value="${String(user || get('mt.lastUser') || '').replace(/[&<>"]/g, '')}">
+    <label>کۆدی ئیمەیڵ</label><input id="fc" dir="ltr" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX-XXXXX-XXXXX">
+    <button id="fgo">بەردەوامبوون</button><div class="err" id="fer">${msg || ''}</div>
+    <p style="margin-top:14px;font-size:13px">ئەگەر ئیمەیڵت بۆ ئەکاونتەکە دانەنابوو: ئادمینێکی تر دەتوانێت لە <b>👥 ئەکاونتەکان</b> پاسۆردێکی نوێت بۆ دابنێت، یان بە Tokenـی GitHub بچۆ ژوورەوە.</p>
+    <button class="link" id="tk">چوونەژوورەوە بە Token</button>
     <button class="link" id="bk">گەڕانەوە</button>`;
-  document.getElementById('tk').onclick = () => form();
-  document.getElementById('bk').onclick = () => pwForm();
+  const $ = id => document.getElementById(id);
+  $('tk').onclick = () => form(); $('bk').onclick = () => pwForm();
+  $('fgo').onclick = () => { const u = $('fu').value.trim(), c = $('fc').value.trim(); if (u && c) resetFlow(u, c); };
+}
+async function resetFlow(user, code) {
+  await loadLogin();
+  const un = String(user).trim().toLowerCase(), e = (LOGIN || []).find(x => (x.user || 'admin').toLowerCase() === un);
+  if (!e || !e.rec) return forgot(e ? 'ئەم ئەکاونتە ئیمەیڵی بۆ دانەنراوە.' : 'ئەم ناوە نییە.', user);
+  box.innerHTML = '<div class="spin"></div>';
+  let c;
+  try { c = await openSeal(normCode(code), e.rec); } catch { return forgot('کۆدەکە هەڵەیە.', user); }
+  c = {...c, user: c.user || e.user || 'admin'};
+  box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">پاسۆردی نوێ</h1><p><b>${un.replace(/[&<>"]/g, '')}</b> — پاسۆردێکی نوێ دابنێ.</p>
+    <label>پاسۆردی نوێ</label><input id="n1" type="password" autocomplete="new-password">
+    <label>دووبارە</label><input id="n2" type="password" autocomplete="new-password">
+    <button id="nsave">پاشەکەوتکردن و چوونەژوورەوە</button><div class="err" id="ner"></div>`;
+  const $ = id => document.getElementById(id);
+  $('n1').focus();
+  $('nsave').onclick = async () => {
+    const a = $('n1').value, b = $('n2').value;
+    if (a.length < 8) return $('ner').textContent = 'پاسۆرد دەبێت لانیکەم ٨ پیت بێت';
+    if (a !== b) return $('ner').textContent = 'دوو پاسۆردەکە وەک یەک نین';
+    $('nsave').disabled = true; $('nsave').textContent = '…';
+    const appRepo = location.pathname.split('/').filter(x => x && !x.includes('.'))[0] || 'tracker-app';
+    const url = `https://api.github.com/repos/${c.owner}/${appRepo}/contents/login.json`, H = {Authorization: `Bearer ${c.token}`, 'X-GitHub-Api-Version': '2022-11-28'};
+    let saved = false;
+    try {
+      const m = await fetch(url + '?t=' + Date.now(), {headers: H, cache: 'no-store'}); const mj = await m.json();
+      const L = JSON.parse(decodeURIComponent(escape(atob(mj.content.replace(/\n/g, '')))));
+      const fresh = await seal(a, {owner: c.owner, repo: c.repo, branch: c.branch || 'main', token: c.token, role: c.role, user: c.user});
+      const out = L.map(x => (x.user || 'admin').toLowerCase() === un ? {...x, ...fresh} : x);
+      const r = await fetch(url, {method: 'PUT', headers: {...H, 'Content-Type': 'application/json'}, body: JSON.stringify({message: 'reset password: ' + un, sha: mj.sha, content: btoa(unescape(encodeURIComponent(JSON.stringify(out, null, 1) + '\n')))})});
+      saved = r.ok;
+    } catch {}
+    set(K, c); set('mt.lastUser', un);
+    if (!saved) { alert('چوویتە ژوورەوە، بەڵام پاسۆردەکە نەگۆڕدرا (ئەم ئەکاونتە مۆڵەتی گۆڕینی نییە). داوا لە ئادمین بکە پاسۆردێکی نوێت بۆ دابنێت.'); }
+    LOGIN = null; start();
+  };
 }
 function form(msg) {
   const c = get(K) || (LOGIN && LOGIN.find(x => x.owner) ? {owner: LOGIN.find(x => x.owner).owner, repo: LOGIN.find(x => x.owner).repo} : {}), e = x => String(x || '').replace(/[&<>"]/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[m]));
@@ -97,6 +141,8 @@ function form(msg) {
 }
 function show(html) { document.open(); document.write(html); document.close(); }
 async function start() {
+  const rs = location.hash.match(/^#reset=([^:]+):(.+)$/);
+  if (rs) { history.replaceState(null, '', location.pathname + location.search); return resetFlow(decodeURIComponent(rs[1]), decodeURIComponent(rs[2])); }
   const c = get(K);
   if (!c || !c.token) {
     await loadLogin();
