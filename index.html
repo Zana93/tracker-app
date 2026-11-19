@@ -28,6 +28,7 @@
 <body>
 <div class="box" id="box"><div class="spin"></div></div>
 <script>
+(() => { // own scope: the dashboard is written into this same page, so nothing here may clash with its names
 // Public loader: holds no data and no program. After sign-in it loads the real dashboard
 // from your PRIVATE repo with your token, so nothing about what you track is public.
 const K = 'mt.conn', CACHE = 'mt.shell';
@@ -96,6 +97,7 @@ async function start() {
   }
 }
 start();
+})();
 </script>
 </body>
 </html>
