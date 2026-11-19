@@ -46,18 +46,22 @@ async function openSeal(pw, e) {
 let LOGIN = null;
 async function loadLogin() { if (LOGIN === null || !LOGIN.length) { try { const r = await fetch('login.json?t=' + Date.now(), {cache: 'no-store'}); LOGIN = r.ok ? await r.json() : []; } catch { LOGIN = []; } } }
 function pwForm(msg) {
-  box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">چاودێری بازاڕ</h1><p>پاسۆردەکەت بنووسە.</p>
-    <label>پاسۆرد</label><input id="pw" type="password" autocomplete="current-password" autofocus>
+  box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">چاودێری بازاڕ</h1><p>بە ناو و پاسۆردی خۆت بچۆ ژوورەوە.</p>
+    <label>ناو</label><input id="un" autocomplete="username" autocapitalize="none" spellcheck="false" dir="auto" value="${(get('mt.lastUser') || '').replace(/[&<>"]/g, '')}">
+    <label>پاسۆرد</label><input id="pw" type="password" autocomplete="current-password">
     <button id="go">چوونەژوورەوە</button><div class="err" id="er">${msg || ''}</div>
     <button class="link" id="tk">چوونەژوورەوە بە Token</button>`;
   const $ = id => document.getElementById(id);
   const go = async () => {
-    const pw = $('pw').value; if (!pw) return;
+    const un = $('un').value.trim().toLowerCase(), pw = $('pw').value; if (!un || !pw) return;
     $('go').disabled = true; $('go').textContent = '…'; $('er').textContent = '';
-    for (const e of LOGIN) { try { const c = await openSeal(pw, e); set(K, c); return start(); } catch {} }
-    $('go').disabled = false; $('go').textContent = 'چوونەژوورەوە'; $('er').textContent = 'پاسۆرد هەڵەیە';
+    for (const e of LOGIN.filter(e => (e.user || 'admin').toLowerCase() === un)) {
+      try { const c = await openSeal(pw, e); set(K, {...c, user: c.user || e.user || 'admin'}); set('mt.lastUser', un); return start(); } catch {}
+    }
+    $('go').disabled = false; $('go').textContent = 'چوونەژوورەوە'; $('er').textContent = 'ناو یان پاسۆرد هەڵەیە';
   };
   $('go').onclick = go; $('pw').onkeydown = e => { if (e.key === 'Enter') go(); };
+  ($('un').value ? $('pw') : $('un')).focus();
   $('tk').onclick = () => form();
 }
 function form(msg) {
