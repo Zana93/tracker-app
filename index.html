@@ -44,6 +44,7 @@ async function openSeal(pw, e) {
   return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name: 'AES-GCM', iv: b64u8(e.iv)}, key, b64u8(e.data))));
 }
 let LOGIN = null;
+async function loadLogin() { if (LOGIN === null || !LOGIN.length) { try { const r = await fetch('login.json?t=' + Date.now(), {cache: 'no-store'}); LOGIN = r.ok ? await r.json() : []; } catch { LOGIN = []; } } }
 function pwForm(msg) {
   box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">چاودێری بازاڕ</h1><p>پاسۆردەکەت بنووسە.</p>
     <label>پاسۆرد</label><input id="pw" type="password" autocomplete="current-password" autofocus>
@@ -79,14 +80,18 @@ function show(html) { document.open(); document.write(html); document.close(); }
 async function start() {
   const c = get(K);
   if (!c || !c.token) {
-    if (LOGIN === null) { try { const r = await fetch('login.json?t=' + Date.now(), {cache: 'no-store'}); LOGIN = r.ok ? await r.json() : []; } catch { LOGIN = []; } }
+    await loadLogin();
     return LOGIN.length ? pwForm() : form();
   }
   box.innerHTML = '<div class="spin"></div>';
   try {
     const res = await fetch(`https://api.github.com/repos/${c.owner}/${c.repo}/contents/dashboard/index.html?ref=${c.branch || 'main'}&t=${Date.now()}`,
       {headers: {Authorization: `Bearer ${c.token}`, Accept: 'application/vnd.github.raw+json', 'X-GitHub-Api-Version': '2022-11-28'}, cache: 'no-store'});
-    if (res.status === 401 || res.status === 403 || res.status === 404) { localStorage.removeItem(K); return form('Token یان username/Repo هەڵەیە، یان Tokenەکە بەسەرچووە (' + res.status + ')'); }
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      // the saved token no longer works (e.g. it was regenerated): forget it and ask for the password again
+      localStorage.removeItem(K); await loadLogin();
+      return LOGIN.length ? pwForm('چوونەژوورەوەی پێشوو بەسەرچووە، پاسۆردەکەت بنووسەرەوە.') : form('Token یان username/Repo هەڵەیە، یان Tokenەکە بەسەرچووە (' + res.status + ')');
+    }
     if (!res.ok) throw new Error(res.status);
     const html = await res.text();
     try { localStorage.setItem(CACHE, html); } catch {}
