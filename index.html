@@ -50,7 +50,7 @@ function pwForm(msg) {
     <label>ناو</label><input id="un" autocomplete="username" autocapitalize="none" spellcheck="false" dir="auto" value="${(get('mt.lastUser') || '').replace(/[&<>"]/g, '')}">
     <label>پاسۆرد</label><input id="pw" type="password" autocomplete="current-password">
     <button id="go">چوونەژوورەوە</button><div class="err" id="er">${msg || ''}</div>
-    <button class="link" id="tk">چوونەژوورەوە بە Token</button>`;
+    <button class="link" id="fg">پاسۆردت لەبیر چووە؟</button>`;
   const $ = id => document.getElementById(id);
   const go = async () => {
     const un = $('un').value.trim().toLowerCase(), pw = $('pw').value; if (!un || !pw) return;
@@ -62,10 +62,25 @@ function pwForm(msg) {
   };
   $('go').onclick = go; $('pw').onkeydown = e => { if (e.key === 'Enter') go(); };
   ($('un').value ? $('pw') : $('un')).focus();
-  $('tk').onclick = () => form();
+  $('fg').onclick = forgot;
+}
+// no server, so a password can't be emailed: the way back in is the GitHub token, then set a new password
+function forgot() {
+  box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">پاسۆردت لەبیر چووە؟</h1>
+    <p>پاسۆردەکان لە هیچ شوێنێک بە ئاشکرا هەڵناگیرێن، بۆیە ناردنەوەیان ناکرێت. ئەم ڕێگایە بەکاربهێنە:</p>
+    <ol style="padding-inline-start:20px;margin:0 0 6px;font-size:14px;line-height:1.9">
+      <li>ئەگەر کەسێکی تر ئادمینە، داوای لێ بکە لە <b>👥 ئەکاونتەکان</b> هەمان ناوت بە پاسۆردێکی نوێ دروست بکاتەوە.</li>
+      <li>یان خۆت: لە GitHub بڕۆ بۆ <a style="color:var(--accent)" href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">Fine-grained tokens</a> ← <b>market-tracker</b> ← <b>Regenerate token</b> ← کۆپی بکە.</li>
+      <li>لە خوارەوە بە Token بچۆ ژوورەوە.</li>
+      <li>لە سەرەوە، لە تەنیشت ڕێکەوت، کلیک لە ناوەکەت بکە ← <b>👥 ئەکاونتەکان و پاسۆرد</b> ← هەمان ناوت بە پاسۆردێکی نوێ دروست بکەرەوە.</li>
+    </ol>
+    <button id="tk">چوونەژوورەوە بە Token</button>
+    <button class="link" id="bk">گەڕانەوە</button>`;
+  document.getElementById('tk').onclick = () => form();
+  document.getElementById('bk').onclick = () => pwForm();
 }
 function form(msg) {
-  const c = get(K) || {}, e = x => String(x || '').replace(/[&<>"]/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[m]));
+  const c = get(K) || (LOGIN && LOGIN.find(x => x.owner) ? {owner: LOGIN.find(x => x.owner).owner, repo: LOGIN.find(x => x.owner).repo} : {}), e = x => String(x || '').replace(/[&<>"]/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[m]));
   box.innerHTML = `<h1 style="display:flex;align-items:center;gap:10px"><img src="icon.svg" width="38" height="38" alt="">چاودێری بازاڕ</h1><p>بە GitHub پەیوەست ببە.</p>
     <label>GitHub username</label><input id="o" dir="ltr" value="${e(c.owner)}">
     <label>Repo</label><input id="r" dir="ltr" value="${e(c.repo)}">
